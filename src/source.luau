@@ -1222,129 +1222,40 @@ function Fatality:Drag(InputFrame: Frame, MoveFrame: Frame, Speed : number)
 	local dragToggle: boolean = false;
 	local dragStart: Vector3 = nil;
 	local startPos: UDim2 = nil;
-	local targetPosition: UDim2 = MoveFrame.Position;
 
-	-- Используем существующий accent библиотеки, цветовая схема не меняется.
-	local OutlineProxy = Instance.new("Frame");
-	local OutlineCorner = Instance.new("UICorner");
-	local OutlineStroke = Instance.new("UIStroke");
-
-	OutlineProxy.Name = Fatality:RandomString();
-	OutlineProxy.BackgroundColor3 = Fatality.Colors.Main;
-	OutlineProxy.BackgroundTransparency = 1;
-	OutlineProxy.BorderSizePixel = 0;
-	OutlineProxy.Visible = false;
-	OutlineProxy.ZIndex = 9999;
-	OutlineProxy.Parent = MoveFrame.Parent;
-
-	OutlineCorner.CornerRadius = UDim.new(0, 10);
-	OutlineCorner.Parent = OutlineProxy;
-
-	OutlineStroke.Color = Fatality.Colors.Main;
-	OutlineStroke.Thickness = 1.5;
-	OutlineStroke.Transparency = 1;
-	OutlineStroke.Parent = OutlineProxy;
-
-	local updateInput = function(input)
+	local function updateInput(input)
 		local delta = input.Position - dragStart;
+		local position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+			startPos.Y.Scale, startPos.Y.Offset + delta.Y);
 
-		targetPosition = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
-		);
-
-		-- Плавное следование accent-прокси за курсором.
-		Fatality:CreateAnimation(OutlineProxy, 0.03, {
-			Position = targetPosition
+		Fatality:CreateAnimation(MoveFrame,Speed,nil,{
+			Position = position
 		});
 	end;
 
 	InputFrame.InputBegan:Connect(function(input)
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1
-			and input.UserInputType ~= Enum.UserInputType.Touch then
-			return;
-		end;
-
-		if #Fatality.DragBlacklist > 0 then
-			return;
-		end;
-
-		dragToggle = true;
-		dragStart = input.Position;
-		startPos = MoveFrame.Position;
-		targetPosition = startPos;
-
-		OutlineProxy.Size = MoveFrame.Size;
-		OutlineProxy.AnchorPoint = MoveFrame.AnchorPoint;
-		OutlineProxy.Position = MoveFrame.Position;
-		OutlineProxy.Parent = MoveFrame.Parent;
-		OutlineProxy.Visible = true;
-
-		-- Появление подсветки при начале перетаскивания.
-		Fatality:CreateAnimation(OutlineProxy, 0.18, {
-			BackgroundTransparency = 0.88
-		});
-
-		Fatality:CreateAnimation(OutlineStroke, 0.18, {
-			Transparency = 0.15
-		});
-
-		local inputEndConnection;
-		inputEndConnection = UserInputService.InputEnded:Connect(function(endInput)
-			if endInput.UserInputType ~= Enum.UserInputType.MouseButton1
-				and endInput.UserInputType ~= Enum.UserInputType.Touch then
-				return;
-			end;
-
-			if not dragToggle then
-				return;
-			end;
-
-			dragToggle = false;
-
-			if inputEndConnection then
-				inputEndConnection:Disconnect();
-				inputEndConnection = nil;
-			end;
-
-			-- Убираем подсветку после отпускания.
-			Fatality:CreateAnimation(OutlineProxy, 0.35, {
-				BackgroundTransparency = 1
-			});
-
-			Fatality:CreateAnimation(OutlineStroke, 0.35, {
-				Transparency = 1
-			});
-
-			task.delay(0.2, function()
-				if not dragToggle then
-					OutlineProxy.Visible = false;
-				end;
-			end);
-
-			-- Плавное завершение движения самого окна.
-			Fatality:CreateAnimation(
-				MoveFrame,
-				0.35,
-				Enum.EasingStyle.Quint,
-				{
-					Position = targetPosition
-				}
-			);
-		end);
-	end);
+		if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and #Fatality.DragBlacklist <= 0 then 
+			dragToggle = true
+			dragStart = input.Position
+			startPos = MoveFrame.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragToggle = false
+				end
+			end)
+		end
+	end)
 
 	UserInputService.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement
-			or input.UserInputType == Enum.UserInputType.Touch then
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch and #Fatality.DragBlacklist <= 0 then
 			if dragToggle then
-				updateInput(input);
-			end;
-		elseif #Fatality.DragBlacklist > 0 then
-			dragToggle = false;
-		end;
+				updateInput(input)
+			end
+		else
+			if #Fatality.DragBlacklist > 0 then
+				dragToggle = false
+			end
+		end
 	end);
 end;
 
@@ -8224,16 +8135,6 @@ function Fatality.new(Window: Window)
 		Fatality.WindowFlags[Fatalitywin][(SideConfig.Flag or "ESP") .. "ESPPreview"] = Response;
 
 		return Response;
-	end;
-
-	if Window.ESPPreview ~= false then
-		local PanelConfig: ESPPreview = {};
-
-		if type(Window.ESPPreview) == "table" then
-			PanelConfig = Window.ESPPreview;
-		end;
-
-		CreateSideESPPreview(PanelConfig);
 	end;
 
 	function Fatal:SetVisible(b)
